@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeafLink X1 – Smart Irrigation Dashboard</title>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+/* ---------------- GLOBAL STYLING ---------------- */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #2dd4bf, #60a5fa);
+    color: #fff;
+}
+
+h2 {
+    margin-top: 0;
+}
+
+/* ---------------- SIDEBAR ---------------- */
+.sidebar {
+    width: 230px;
+    height: 100vh;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    box-shadow: 3px 0 15px rgba(0,0,0,0.2);
+}
+
+.sidebar h1 {
+    text-align: center;
+    font-size: 24px;
+    margin-bottom: 25px;
+}
+
+.sidebar button {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 17px;
+    padding: 15px;
+    text-align: left;
+    cursor: pointer;
+    transition: 0.3s;
+    border-left: 4px solid transparent;
+}
+
+.sidebar button:hover {
+    background: rgba(255,255,255,0.2);
+    border-left: 4px solid #fff;
+}
+
+/* ---------------- MAIN AREA ---------------- */
+.main {
+    margin-left: 260px;
+    padding: 30px;
+}
+
+/* ---------------- GLASS CARDS ---------------- */
+.card {
+    background: rgba(255,255,255,0.2);
+    padding: 20px;
+    border-radius: 18px;
+    margin: 20px 0;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    transition: 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+}
+
+/* Value Styling */
+.value {
+    font-size: 45px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0px 0px 10px black;
+}
+
+/* Control Buttons */
+.controls button {
+    width: 100%;
+    padding: 15px;
+    margin-top: 15px;
+    border-radius: 10px;
+    border: none;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.toggle-on {
+    background: #22c55e;
+    color: #fff;
+}
+
+.toggle-off {
+    background: #ef4444;
+    color: #fff;
+}
+
+.controls button:hover {
+    filter: brightness(1.15);
+}
+
+/* Range Slider */
+input[type=range] {
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* Hide all screens */
+.screen {
+    display: none;
+}
+
+.active {
+    display: block;
+}
+</style>
+</head>
+<body>
+
+<!-- ---------------- SIDEBAR ---------------- -->
+<div class="sidebar">
+    <h1>🌿 LeafLink X1</h1>
+    <button onclick="showScreen('pairing')">🔗 Pair Device</button>
+    <button onclick="showScreen('dashboard')">📊 Dashboard</button>
+    <button onclick="showScreen('controls')">🎛 Controls</button>
+    <button onclick="showScreen('history')">📈 History</button>
+    <button onclick="showScreen('settings')">⚙ Settings</button>
+</div>
+
+<!-- ---------------- MAIN AREA ---------------- -->
+<div class="main">
+
+<!-- 1. Pairing Screen -->
+<div id="pairing" class="screen active">
+    <h2>🔗 Connect to Device</h2>
+
+    <div class="card">
+        <p>Connect to your LeafLink irrigation controller using Bluetooth.</p>
+        <button onclick="connectBLE()" class="toggle-on">Connect</button>
+        <p id="bleStatus"></p>
+    </div>
+</div>
+
+<!-- 2. Dashboard -->
+<div id="dashboard" class="screen">
+    <h2>📊 Live Dashboard</h2>
+
+    <div class="card">
+        <h3>Soil Moisture</h3>
+        <p class="value" id="soilValue">--%</p>
+    </div>
+
+    <div class="card">
+        <h3>Water Level</h3>
+        <p class="value" id="waterValue">--%</p>
+    </div>
+
+    <div class="card">
+        <h3>Temperature</h3>
+        <p class="value" id="tempValue">-- °C</p>
+    </div>
+
+    <div class="card">
+        <h3>Battery Level</h3>
+        <p class="value" id="battValue">--%</p>
+    </div>
+</div>
+
+<!-- 3. Controls -->
+<div id="controls" class="screen">
+    <h2>🎛 Controls</h2>
+
+    <div class="card controls">
+        <h3>Irrigation Pump</h3>
+        <button id="pumpBtn" class="toggle-off" onclick="togglePump()">Pump: OFF</button>
+
+        <label>Duration (sec):</label>
+        <input type="range" min="5" max="60" id="pumpDuration">
+    </div>
+
+    <div class="card controls">
+        <h3>Mist System</h3>
+        <button id="mistBtn" class="toggle-off" onclick="toggleMist()">Mist: OFF</button>
+    </div>
+
+    <div class="card controls">
+        <h3>Buzzer</h3>
+        <button id="buzzBtn" class="toggle-off" onclick="toggleBuzz()">Buzzer: OFF</button>
+        <button class="toggle-on" onclick="sendCommand('BUZZ:1')">🔊 Test Beep</button>
+    </div>
+</div>
+
+<!-- 4. History -->
+<div id="history" class="screen">
+    <h2>📈 Telemetry History</h2>
+    <div class="card">
+        <canvas id="historyChart" height="200"></canvas>
+    </div>
+</div>
+
+<!-- 5. Settings -->
+<div id="settings" class="screen">
+    <h2>⚙ Settings</h2>
+
+    <div class="card">
+        <h3>Calibration</h3>
+        <p>Set thresholds and sensor calibration.</p>
+    </div>
+
+    <div class="card">
+        <h3>Connected Device</h3>
+        <p id="connectedDeviceName">None</p>
+    </div>
+
+    <div class="card">
+        <h3>Security</h3>
+        <p>Secure pairing enabled.</p>
+    </div>
+</div>
+
+</div>
+
+<!-- ---------------- JAVASCRIPT ---------------- -->
+<script>
+
+function showScreen(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+}
+
+/* ---------------- BLE SETUP ---------------- */
+let bleDevice, bleServer, telemetryChar, commandChar;
+
+const SERVICE_UUID = "0000abcd-0000-1000-8000-00805f9b34fb";
+const TELEMETRY_UUID = "0000abce-0000-1000-8000-00805f9b34fb";
+const COMMAND_UUID   = "0000abcf-0000-1000-8000-00805f9b34fb";
+
+async function connectBLE() {
+    try {
+        document.getElementById("bleStatus").textContent = "Searching...";
+
+        bleDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: "LeafLink" }],
+            optionalServices: [SERVICE_UUID]
+        });
+
+        bleServer = await bleDevice.gatt.connect();
+        const service = await bleServer.getPrimaryService(SERVICE_UUID);
+
+        telemetryChar = await service.getCharacteristic(TELEMETRY_UUID);
+        commandChar   = await service.getCharacteristic(COMMAND_UUID);
+
+        telemetryChar.startNotifications();
+        telemetryChar.addEventListener("characteristicvaluechanged", handleTelemetry);
+
+        document.getElementById("bleStatus").textContent = "Connected ✔";
+        document.getElementById("connectedDeviceName").textContent = bleDevice.name;
+
+    } catch (err) {
+        document.getElementById("bleStatus").textContent = "Error: " + err;
+    }
+}
+
+/* ----------- TELEMETRY DATA ------------- */
+function handleTelemetry(e) {
+    const d = e.target.value;
+
+    let soil = d.getUint8(0);
+    let water = d.getUint8(1);
+    let temp = d.getInt8(2);
+    let batt = d.getUint8(3);
+
+    document.getElementById("soilValue").textContent = soil + "%";
+    document.getElementById("waterValue").textContent = water + "%";
+    document.getElementById("tempValue").textContent = temp + "°C";
+    document.getElementById("battValue").textContent = batt + "%";
+
+    addToHistory(soil, temp);
+}
+
+/* ----------- COMMANDS ------------- */
+function sendCommand(cmd) {
+    if (!commandChar) return alert("Not connected");
+    commandChar.writeValue(new TextEncoder().encode(cmd));
+}
+
+let pumpOn = false;
+function togglePump() {
+    pumpOn = !pumpOn;
+    sendCommand("PUMP:" + (pumpOn ? "1" : "0"));
+
+    let btn = document.getElementById("pumpBtn");
+    btn.textContent = pumpOn ? "Pump: ON" : "Pump: OFF";
+    btn.className = pumpOn ? "toggle-on" : "toggle-off";
+}
+
+let mistOn = false;
+function toggleMist() {
+    mistOn = !mistOn;
+    sendCommand("MIST:" + (mistOn ? "1" : "0"));
+
+    let btn = document.getElementById("mistBtn");
+    btn.textContent = mistOn ? "Mist: ON" : "Mist: OFF";
+    btn.className = mistOn ? "toggle-on" : "toggle-off";
+}
+
+let buzzOn = false;
+function toggleBuzz() {
+    buzzOn = !buzzOn;
+    sendCommand("BUZZ:" + (buzzOn ? "1" : "0"));
+
+    let btn = document.getElementById("buzzBtn");
+    btn.textContent = buzzOn ? "Buzzer: ON" : "Buzzer: OFF";
+    btn.className = buzzOn ? "toggle-on" : "toggle-off";
+}
+
+/* ----------- HISTORY CHART ------------- */
+let historyData = {
+    labels: [],
+    soil: [],
+    temp: []
+};
+
+let chart = new Chart(document.getElementById("historyChart"), {
+    type: "line",
+    data: {
+        labels: historyData.labels,
+        datasets: [
+            { label: "Soil (%)", data: historyData.soil, borderColor: "#22c55e", borderWidth: 3 },
+            { label: "Temp (°C)", data: historyData.temp, borderColor: "#fbbf24", borderWidth: 3 }
+        ]
+    }
+});
+
+function addToHistory(soil, temp) {
+    historyData.labels.push("");
+    historyData.soil.push(soil);
+    historyData.temp.push(temp);
+    chart.update();
+}
+</script>
+
+</body>
+</html>
+
